@@ -172,7 +172,11 @@ class Tree(object):
             del self._modules[name]
         else:
             object.__delattr__(self, name)
-
+    def __call__(self, *args):
+        tmp = self
+        for param in args:
+            tmp = tmp.__getattr__(param)
+        return tmp
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         r"""Returns a dictionary containing a whole state of the module.
 

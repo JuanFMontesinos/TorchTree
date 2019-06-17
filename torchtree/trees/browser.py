@@ -68,8 +68,9 @@ class Directory_Tree(Tree):
         :return: None
         """
         for module, _ in self.named_modules():
-            if module != '':
-                os.mkdir(os.path.join(path, module))
+            _path = os.path.join(path, module)
+            if module != '' and not os.path.exists(_path):
+                os.mkdir(_path)
 
     def paths(self, root='', recurse=True):
         r"""Returns an iterator over module parameters, yielding both the
