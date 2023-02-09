@@ -172,11 +172,13 @@ class Tree(object):
             del self._modules[name]
         else:
             object.__delattr__(self, name)
+
     def __call__(self, *args):
         tmp = self
         for param in args:
             tmp = tmp.__getattr__(param)
         return tmp
+
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         r"""Returns a dictionary containing a whole state of the module.
 
@@ -226,7 +228,7 @@ class Tree(object):
         for name, param in self.named_parameters(recurse=recurse):
             yield param
 
-    def named_parameters(self, prefix='', recurse=True):
+    def named_parameters(self, prefix='', recurse=True, exclude=tuple()):
         r"""Returns an iterator over module parameters, yielding both the
         name of the parameter as well as the parameter itself.
 
@@ -242,7 +244,7 @@ class Tree(object):
         """
         gen = self._named_members(
             lambda module: module._parameters.items(),
-            prefix=prefix, recurse=recurse)
+            prefix=prefix, recurse=recurse, exclude=exclude)
         for elem in gen:
             yield elem
 
@@ -283,10 +285,10 @@ class Tree(object):
         for name, module in self.named_children():
             yield module
 
-    def _named_members(self, get_members_fn, prefix='', recurse=True):
+    def _named_members(self, get_members_fn, prefix='', recurse=True, exclude=tuple()):
         r"""Helper method for yielding various names + members of modules."""
         memo = set()
-        modules = self.named_modules(prefix=prefix) if recurse else [(prefix, self)]
+        modules = self.named_modules(prefix=prefix, exclude=exclude) if recurse else [(prefix, self)]
         for module_prefix, module in modules:
             members = get_members_fn(module)
             for k, v in members:
@@ -296,7 +298,7 @@ class Tree(object):
                 name = module_prefix + ('.' if module_prefix else '') + k
                 yield name, v
 
-    def named_modules(self, memo=None, prefix=''):
+    def named_modules(self, memo=None, prefix='', exclude=tuple()):
         r"""Returns an iterator over all modules in the network, yielding
         both the name of the module as well as the module itself.
 
@@ -314,7 +316,7 @@ class Tree(object):
             memo.add(self)
             yield prefix, self
             for name, module in self._modules.items():
-                if module is None:
+                if module is None or name in exclude:
                     continue
                 submodule_prefix = prefix + ('.' if prefix else '') + name
                 for m in module.named_modules(memo, submodule_prefix):

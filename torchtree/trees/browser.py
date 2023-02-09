@@ -7,28 +7,30 @@ import os
 __all__ = ['Directory_Tree']
 
 
-def scantree(path, tree):
+def scantree(path, tree, ignore, scan_params):
+    forbidden = RESERVED + ignore
     """Recursively yield DirEntry objects for given directory."""
     for entry in scandir(path):
-        if entry.name[0] != '.' and os.path.splitext(entry.name)[0] not in RESERVED:
+        if entry.name[0] != '.' and os.path.splitext(entry.name)[0] not in forbidden:
             if entry.is_dir(follow_symlinks=False):
                 tree.add_module(entry.name, Directory_Tree())
-                yield from scantree(entry.path, getattr(tree, entry.name))
+                yield from scantree(entry.path, getattr(tree, entry.name), forbidden, scan_params)
             else:
-                tree.register_parameter(os.path.splitext(entry.name)[0], os.path.splitext(entry.name)[1])
+                if scan_params:
+                    tree.register_parameter(os.path.splitext(entry.name)[0], os.path.splitext(entry.name)[1])
                 yield entry
 
 
 class Directory_Tree(Tree):
-    def __init__(self, path=None):
+    def __init__(self, path=None, ignore: list = [], scan_params=True):
         super(Directory_Tree, self).__init__()
         if path is not None:
-            list(scantree(path, self))
+            list(scantree(path, self, ignore, scan_params))
 
-    def _named_members(self, get_members_fn, prefix='', recurse=True):
+    def _named_members(self, get_members_fn, prefix='', recurse=True, exclude=tuple()):
         r"""Helper method for yielding various names + members of modules."""
         memo = set()
-        modules = self.named_modules(prefix=prefix) if recurse else [(prefix, self)]
+        modules = self.named_modules(prefix=prefix, exclude=exclude) if recurse else [(prefix, self)]
         for module_prefix, module in modules:
             members = get_members_fn(module)
             for k, v in members:
@@ -36,7 +38,7 @@ class Directory_Tree(Tree):
                 name = module_prefix + ('/' if module_prefix else '') + k
                 yield name, v
 
-    def named_modules(self, memo=None, prefix=''):
+    def named_modules(self, memo=None, prefix='', exclude=tuple()):
         r"""Returns an iterator over all modules in the network, yielding
         both the name of the module as well as the module itself.
 
@@ -54,10 +56,10 @@ class Directory_Tree(Tree):
             memo.add(self)
             yield prefix, self
             for name, module in self._modules.items():
-                if module is None:
+                if module is None or name in exclude:
                     continue
                 submodule_prefix = prefix + ('/' if prefix else '') + name
-                for m in module.named_modules(memo, submodule_prefix):
+                for m in module.named_modules(memo, submodule_prefix, exclude=exclude):
                     yield m
 
     def clone_tree(self, path):
@@ -72,7 +74,7 @@ class Directory_Tree(Tree):
             if module != '' and not os.path.exists(_path):
                 os.mkdir(_path)
 
-    def paths(self, root='', recurse=True):
+    def paths(self, root='', recurse=True, exclude=tuple()):
         r"""Returns an iterator over module parameters, yielding both the
         name of the parameter as well as the parameter itself.
 
@@ -88,6 +90,6 @@ class Directory_Tree(Tree):
         """
         gen = self._named_members(
             lambda module: module._parameters.items(),
-            prefix=root, recurse=recurse)
+            prefix=root, recurse=recurse, exclude=exclude)
         for elem in gen:
             yield elem[0] + elem[1]
